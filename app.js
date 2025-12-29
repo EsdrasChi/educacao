@@ -342,7 +342,7 @@ function renderSections() {
     let html = '';
 
     sections.forEach((section, index) => {
-        const isUnlocked = index === 0 || subjectState.progress.completedSections.includes(sections[index - 1].id);
+        const isUnlocked = true; // Todas as seções desbloqueadas
         const isCompleted = subjectState.progress.completedSections.includes(section.id);
         const sectionProgress = calculateSectionProgress(section.id);
         const difficulty = DIFFICULTY_LEVELS[section.difficulty] || DIFFICULTY_LEVELS[1];
@@ -453,7 +453,7 @@ function renderUnits(sectionId) {
     let html = '';
 
     units.forEach((unit, index) => {
-        const isUnlocked = index === 0 || subjectState.progress.completedUnits.includes(units[index - 1].id);
+        const isUnlocked = true; // Todas as unidades desbloqueadas
         const isCompleted = subjectState.progress.completedUnits.includes(unit.id);
         const unitProgress = calculateUnitProgress(unit.id);
         const sectionColor = section?.color || subject.color;
@@ -545,7 +545,7 @@ function renderBlocks(unitId, section) {
     blocks.forEach((block, index) => {
         const isCompleted = subjectState.progress.completedBlocks.includes(block.id);
         const prevCompleted = index === 0 || subjectState.progress.completedBlocks.includes(blocks[index - 1].id);
-        const isUnlocked = index === 0 || prevCompleted;
+        const isUnlocked = true; // Todas as atividades desbloqueadas
         const isCurrent = isUnlocked && !isCompleted;
         const blockType = BLOCK_TYPES[block.type];
 
