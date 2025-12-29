@@ -1,7 +1,25 @@
 // ==========================================
-// EDULEARN - APP v4.0
+// SABERQUEST - APP v5.0
 // Plataforma Multi-Disciplinar de Aprendizado
+// Com Sistema Multi-Usuário
 // ==========================================
+
+// Usuários do sistema
+const USERS = {
+    esdras: {
+        name: 'Esdras',
+        avatar: 'fa-user-astronaut',
+        color: '#1cb0f6'
+    },
+    dominic: {
+        name: 'Dominic',
+        avatar: 'fa-user-ninja',
+        color: '#ce82ff'
+    }
+};
+
+// Usuário atual
+let currentUser = null;
 
 // Estado global da aplicação
 let state = {
@@ -11,6 +29,115 @@ let state = {
     },
     subjects: {}
 };
+
+// Variáveis de jogo
+let currentQuizIndex = 0;
+let quizCorrect = 0;
+let matchPairs = [];
+let selectedMatch = null;
+let orderItems = [];
+let flashcardIndex = 0;
+let isFlipped = false;
+let selectedQuizAnswer = null;
+
+// ==========================================
+// SISTEMA DE MULTI-USUÁRIO
+// ==========================================
+
+function getStorageKey() {
+    return currentUser ? `saberquest_${currentUser.toLowerCase()}` : 'saberquest_guest';
+}
+
+function loginAsUser(userName) {
+    if (!USERS[userName.toLowerCase()]) {
+        console.error('Usuário não encontrado:', userName);
+        return;
+    }
+
+    currentUser = userName.toLowerCase();
+    const userInfo = USERS[currentUser];
+    state.globalUser.name = userInfo.name;
+
+    loadProgress();
+    showSubjectSelection();
+
+    console.log(`Usuário ${userInfo.name} logado com sucesso!`);
+}
+
+function switchUser() {
+    saveProgress();
+    currentUser = null;
+    state = {
+        currentSubject: null,
+        globalUser: { name: '' },
+        subjects: {}
+    };
+    showScreen('login-screen');
+    updateLoginScreen();
+}
+
+function updateLoginScreen() {
+    // Atualizar estatísticas dos usuários na tela de login
+    Object.keys(USERS).forEach(userId => {
+        const savedData = localStorage.getItem(`saberquest_${userId}`);
+        const statsEl = document.getElementById(`${userId}-stats`);
+
+        if (statsEl && savedData) {
+            const userData = JSON.parse(savedData);
+            let totalXP = 0;
+            let totalBlocks = 0;
+
+            SUBJECTS.forEach(subject => {
+                if (userData.subjects && userData.subjects[subject.id]) {
+                    totalXP += userData.subjects[subject.id].user?.xp || 0;
+                    totalBlocks += userData.subjects[subject.id].progress?.completedBlocks?.length || 0;
+                }
+            });
+
+            statsEl.innerHTML = `
+                <span><i class="fas fa-star"></i> ${totalXP} XP</span>
+                <span><i class="fas fa-book"></i> ${totalBlocks} blocos</span>
+            `;
+        } else if (statsEl) {
+            statsEl.innerHTML = '<span>Novo jogador</span>';
+        }
+    });
+}
+
+// ==========================================
+// INICIALIZAÇÃO
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('SaberQuest - Iniciando...');
+    console.log('SUBJECTS disponível:', typeof SUBJECTS !== 'undefined' ? SUBJECTS.length + ' matérias' : 'NÃO DEFINIDO');
+
+    try {
+        // Gerar dados das matérias dinamicamente
+        initializeSubjectData();
+
+        // Atualizar tela de login com stats dos usuários
+        updateLoginScreen();
+
+        console.log('SaberQuest inicializado com sucesso!');
+    } catch (error) {
+        console.error('Erro na inicialização:', error);
+    }
+});
+
+function initializeSubjectData() {
+    // Gerar estrutura de dados para cada matéria usando ContentGenerator
+    if (typeof ContentGenerator !== 'undefined') {
+        SUBJECTS.forEach(subject => {
+            if (!SUBJECT_DATA[subject.id]) {
+                console.log(`Gerando dados para ${subject.name}...`);
+                SUBJECT_DATA[subject.id] = ContentGenerator.generateSubjectStructure(subject.id);
+            }
+        });
+        console.log('Dados das matérias gerados com sucesso!');
+    } else {
+        console.warn('ContentGenerator não disponível. Usando dados estáticos.');
+    }
+}
 
 // Inicializar estado para cada matéria
 function initializeSubjectState(subjectId) {
@@ -52,32 +179,6 @@ function getCurrentSubjectData() {
     return SUBJECT_DATA[state.currentSubject] || null;
 }
 
-// Variáveis de jogo
-let currentQuizIndex = 0;
-let quizCorrect = 0;
-let matchPairs = [];
-let selectedMatch = null;
-let orderItems = [];
-let flashcardIndex = 0;
-let isFlipped = false;
-let selectedQuizAnswer = null;
-
-// ==========================================
-// INICIALIZAÇÃO
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🔍 DOMContentLoaded - Iniciando app');
-    console.log('🔍 SUBJECTS disponível:', typeof SUBJECTS !== 'undefined' ? SUBJECTS.length + ' matérias' : 'NÃO DEFINIDO');
-    try {
-        loadProgress();
-        console.log('🔍 loadProgress() concluído');
-        checkDailyReset();
-        console.log('✅ App inicializado com sucesso');
-    } catch (error) {
-        console.error('❌ Erro na inicialização:', error);
-    }
-});
-
 function checkDailyReset() {
     const today = new Date().toDateString();
     SUBJECTS.forEach(subject => {
@@ -94,39 +195,12 @@ function checkDailyReset() {
 // NAVEGAÇÃO
 // ==========================================
 function showScreen(screenId) {
-    console.log('🔍 showScreen() chamada com:', screenId);
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const screen = document.getElementById(screenId);
     if (screen) {
         screen.classList.add('active');
-        console.log('✅ Tela ativada:', screenId);
     } else {
-        console.error('❌ Tela não encontrada:', screenId);
-    }
-}
-
-function startJourney() {
-    console.log('🔍 startJourney() chamada');
-    try {
-        const username = document.getElementById('username').value.trim();
-        state.globalUser.name = username || 'Estudante';
-        console.log('🔍 Nome do usuário:', state.globalUser.name);
-        saveProgress();
-        console.log('🔍 Progresso salvo');
-        showSubjectSelection();
-        console.log('✅ startJourney() concluída');
-    } catch (error) {
-        console.error('❌ Erro em startJourney():', error);
-        alert('Erro: ' + error.message);
-    }
-}
-
-function continueJourney() {
-    loadProgress();
-    if (state.globalUser.name) {
-        showSubjectSelection();
-    } else {
-        showScreen('login-screen');
+        console.error('Tela não encontrada:', screenId);
     }
 }
 
@@ -135,16 +209,25 @@ function continueJourney() {
 // ==========================================
 function showSubjectSelection() {
     showScreen('subject-selection-screen');
+
+    // Atualizar nome do usuário no header
+    const userInfo = USERS[currentUser];
+    const headerUser = document.getElementById('header-user-name');
+    if (headerUser && userInfo) {
+        headerUser.innerHTML = `
+            <i class="fas ${userInfo.avatar}" style="color: ${userInfo.color}"></i>
+            ${userInfo.name}
+        `;
+    }
+
     renderSubjects();
+    checkDailyReset();
 }
 
 function renderSubjects() {
-    console.log('🔍 renderSubjects() chamada');
     const container = document.getElementById('subjects-container');
-    console.log('🔍 Container:', container);
-    console.log('🔍 SUBJECTS:', SUBJECTS);
     if (!container) {
-        console.error('❌ Container subjects-container não encontrado!');
+        console.error('Container subjects-container não encontrado!');
         return;
     }
 
@@ -185,9 +268,7 @@ function renderSubjects() {
         `;
     });
 
-    console.log('🔍 HTML gerado, tamanho:', html.length);
     container.innerHTML = html;
-    console.log('✅ renderSubjects() concluída');
 }
 
 function selectSubject(subjectId) {
@@ -210,7 +291,6 @@ function showMainScreen() {
 
     const subject = getSubject(state.currentSubject);
     if (subject) {
-        // Atualizar header com info da matéria
         const subjectIndicator = document.getElementById('current-subject-indicator');
         if (subjectIndicator) {
             subjectIndicator.innerHTML = `
@@ -245,7 +325,7 @@ function renderSections() {
     const subject = getSubject(state.currentSubject);
 
     if (!subjectData || !subjectState || !subject) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Conteúdo em desenvolvimento...</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Carregando conteúdo...</p>';
         return;
     }
 
@@ -254,8 +334,10 @@ function renderSections() {
     const completedBlocks = subjectState.progress.completedBlocks.length;
     const overallProgress = Math.round((completedBlocks / totalBlocks) * 100);
 
-    document.getElementById('overall-progress').style.width = `${overallProgress}%`;
-    document.getElementById('progress-text').textContent = `${overallProgress}% concluído`;
+    const progressEl = document.getElementById('overall-progress');
+    const progressTextEl = document.getElementById('progress-text');
+    if (progressEl) progressEl.style.width = `${overallProgress}%`;
+    if (progressTextEl) progressTextEl.textContent = `${overallProgress}% concluído`;
 
     let html = '';
 
@@ -278,7 +360,7 @@ function renderSections() {
                         <div class="section-progress-fill" style="width: ${sectionProgress}%; background: ${section.color || subject.color}"></div>
                     </div>
                     <div class="section-meta">
-                        <span><i class="fas fa-book"></i> 10 unidades</span>
+                        <span><i class="fas fa-book"></i> 15 unidades</span>
                         <span class="difficulty-tag" style="background: ${difficulty.color}20; color: ${difficulty.color}">
                             ${difficulty.name}
                         </span>
@@ -339,12 +421,20 @@ function openSection(sectionId) {
 
     const headerBg = document.getElementById('section-header-bg');
     const sectionColor = section.color || subject.color;
-    headerBg.style.background = `linear-gradient(135deg, ${sectionColor}, ${adjustColor(sectionColor, -30)})`;
+    if (headerBg) {
+        headerBg.style.background = `linear-gradient(135deg, ${sectionColor}, ${adjustColor(sectionColor, -30)})`;
+    }
 
-    document.getElementById('section-title').textContent = section.title;
-    document.getElementById('section-subtitle').textContent = section.subtitle;
-    document.getElementById('section-icon').className = `fas ${section.icon || subject.icon}`;
-    document.getElementById('section-icon').style.color = 'white';
+    const titleEl = document.getElementById('section-title');
+    const subtitleEl = document.getElementById('section-subtitle');
+    const iconEl = document.getElementById('section-icon');
+
+    if (titleEl) titleEl.textContent = section.title;
+    if (subtitleEl) subtitleEl.textContent = section.subtitle;
+    if (iconEl) {
+        iconEl.className = `fas ${section.icon || subject.icon}`;
+        iconEl.style.color = 'white';
+    }
 
     renderUnits(sectionId);
 }
@@ -435,8 +525,12 @@ function openUnit(unitId) {
 
     const headerBg = document.getElementById('unit-header-bg');
     const sectionColor = section?.color || subject.color;
-    headerBg.style.background = `linear-gradient(135deg, ${sectionColor}, ${adjustColor(sectionColor, -30)})`;
-    document.getElementById('unit-title').textContent = unit.title;
+    if (headerBg) {
+        headerBg.style.background = `linear-gradient(135deg, ${sectionColor}, ${adjustColor(sectionColor, -30)})`;
+    }
+
+    const titleEl = document.getElementById('unit-title');
+    if (titleEl) titleEl.textContent = unit.title;
 
     renderBlocks(unitId, section || subject);
 }
@@ -509,7 +603,7 @@ function backToUnits() {
 // ==========================================
 // EXECUTAR BLOCO
 // ==========================================
-function startBlock(blockId) {
+async function startBlock(blockId) {
     const subjectState = getCurrentSubjectState();
     const subject = getSubject(state.currentSubject);
     const unitId = Math.floor(blockId / 100);
@@ -526,20 +620,76 @@ function startBlock(blockId) {
     const sectionId = Math.floor(unitId / 100);
     const subjectData = getCurrentSubjectData();
     const section = subjectData?.SECTIONS?.find(s => s.id === sectionId);
-    document.getElementById('block-header-bg').style.background = section?.color || subject.color;
 
-    document.getElementById('hearts-count').textContent = subjectState.user.hearts;
-    document.getElementById('block-action-btn').style.display = 'block';
-    document.getElementById('block-action-btn').disabled = false;
+    const headerEl = document.getElementById('block-header-bg');
+    if (headerEl) headerEl.style.background = section?.color || subject.color;
+
+    const heartsEl = document.getElementById('hearts-count');
+    if (heartsEl) heartsEl.textContent = subjectState.user.hearts;
+
+    const actionBtn = document.getElementById('block-action-btn');
+    if (actionBtn) {
+        actionBtn.style.display = 'block';
+        actionBtn.disabled = false;
+    }
+
+    // Gerar conteúdo dinâmico se necessário
+    if (block.content.generated && typeof ContentGenerator !== 'undefined') {
+        await generateDynamicContent(block, subject, section);
+    }
 
     renderBlockContent(block);
     updateBlockProgress();
 }
 
+async function generateDynamicContent(block, subject, section) {
+    const unitTitle = block.content.unitTitle || block.title;
+    const topic = block.content.topic || unitTitle;
+
+    try {
+        // Gerar conteúdo baseado no tipo de bloco
+        switch (block.type) {
+            case 'reading':
+                block.content = await ContentGenerator.generateReading(topic, subject.id);
+                break;
+            case 'quiz':
+                block.content = await ContentGenerator.generateQuiz(topic, subject.id);
+                break;
+            case 'video':
+                block.content = await ContentGenerator.generateVideo(topic, subject.id);
+                break;
+            case 'match':
+                block.content = ContentGenerator.generateMatch(topic, subject.id);
+                break;
+            case 'flashcard':
+                block.content = ContentGenerator.generateFlashcard(topic, subject.id);
+                break;
+            case 'reflection':
+                block.content = ContentGenerator.generateReflection(topic, subject.id);
+                break;
+            case 'timeline':
+                block.content = ContentGenerator.generateTimeline(topic, subject.id);
+                break;
+            case 'concept':
+                block.content = await ContentGenerator.generateConcept(topic, subject.id);
+                break;
+            case 'order':
+                block.content = ContentGenerator.generateOrder(topic, subject.id);
+                break;
+            case 'fill':
+                block.content = ContentGenerator.generateFill(topic, subject.id);
+                break;
+        }
+    } catch (error) {
+        console.error('Erro ao gerar conteúdo:', error);
+        // Manter conteúdo gerado padrão
+    }
+}
+
 function renderBlockContent(block) {
     const container = document.getElementById('block-content');
 
-    // Se o conteúdo foi gerado automaticamente, criar conteúdo padrão
+    // Se o conteúdo ainda está como gerado automaticamente, mostrar placeholder
     if (block.content.generated) {
         renderGeneratedBlock(container, block);
         return;
@@ -615,8 +765,11 @@ function renderGeneratedBlock(container, block) {
         </div>
     `;
 
-    document.getElementById('block-action-btn').textContent = 'Continuar';
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const actionBtn = document.getElementById('block-action-btn');
+    if (actionBtn) {
+        actionBtn.textContent = 'Continuar';
+        actionBtn.onclick = () => completeBlock();
+    }
 }
 
 // ==========================================
@@ -638,11 +791,18 @@ function renderConcept(container, block) {
                         </ul>
                     </div>
                 ` : ''}
+                ${c.source ? `
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-card); border-radius: 8px; font-size: 14px;">
+                        <i class="fas fa-link" style="color: var(--secondary);"></i>
+                        <span style="color: var(--text-muted);">Fonte: ${c.source}</span>
+                    </div>
+                ` : ''}
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Entendi!';
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Entendi!';
+    actionBtn.onclick = () => completeBlock();
 }
 
 // ==========================================
@@ -653,25 +813,32 @@ function renderVideo(container, block) {
     container.innerHTML = `
         <div class="video-block animate-in">
             <div class="video-container">
-                <div class="video-placeholder">
-                    <i class="fas fa-play-circle" style="font-size: 64px; color: var(--danger);"></i>
-                    <span>Clique para assistir</span>
-                </div>
+                ${c.poster ? `<img src="${c.poster}" alt="${c.title}" style="width: 100%; border-radius: 12px; margin-bottom: 16px;">` : `
+                    <div class="video-placeholder">
+                        <i class="fas fa-play-circle" style="font-size: 64px; color: var(--danger);"></i>
+                        <span>Clique para assistir</span>
+                    </div>
+                `}
                 <div class="video-info" style="margin-top: 16px;">
                     <h3>${c.title}</h3>
                     ${c.director ? `<p style="color: var(--secondary); margin-bottom: 8px;">Dir: ${c.director}</p>` : ''}
+                    ${c.year ? `<p style="color: var(--text-muted); margin-bottom: 8px;">Ano: ${c.year}</p>` : ''}
                     <p style="color: var(--text-secondary); line-height: 1.6;">${c.description}</p>
-                    <div style="margin-top: 12px; color: var(--text-muted);">
-                        <i class="fas fa-clock"></i> ${c.duration}
-                    </div>
+                    ${c.duration ? `
+                        <div style="margin-top: 12px; color: var(--text-muted);">
+                            <i class="fas fa-clock"></i> ${c.duration}
+                        </div>
+                    ` : ''}
                 </div>
-                <a href="${c.videoUrl}" target="_blank" class="video-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 24px; background: var(--danger); color: white; text-decoration: none; border-radius: 12px; font-weight: 600;">
-                    <i class="fas fa-play"></i> Assistir
-                </a>
-                ${c.amazonLink ? `
-                    <a href="${c.amazonLink}" target="_blank" class="amazon-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; margin-left: 8px; padding: 12px 24px; background: #FF9900; color: white; text-decoration: none; border-radius: 12px; font-weight: 600;">
-                        <i class="fab fa-amazon"></i> Comprar na Amazon
+                ${c.videoUrl ? `
+                    <a href="${c.videoUrl}" target="_blank" class="video-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 24px; background: var(--danger); color: white; text-decoration: none; border-radius: 12px; font-weight: 600;">
+                        <i class="fas fa-play"></i> Assistir
                     </a>
+                ` : ''}
+                ${c.whereToWatch ? `
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-card); border-radius: 8px;">
+                        <strong>Onde assistir:</strong> ${c.whereToWatch}
+                    </div>
                 ` : ''}
             </div>
             ${c.reflectionQuestions ? `
@@ -684,8 +851,9 @@ function renderVideo(container, block) {
             ` : ''}
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Assistido!';
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Assistido!';
+    actionBtn.onclick = () => completeBlock();
 }
 
 // ==========================================
@@ -715,19 +883,27 @@ function renderQuiz(container, block) {
                     </button>
                 `).join('')}
             </div>
+            ${q.explanation ? `
+                <div id="quiz-explanation" style="display: none; margin-top: 16px; padding: 16px; background: var(--bg-card); border-radius: 12px;">
+                    <strong><i class="fas fa-lightbulb" style="color: var(--warning);"></i> Explicação:</strong>
+                    <p style="margin-top: 8px; color: var(--text-secondary);">${q.explanation}</p>
+                </div>
+            ` : ''}
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Verificar';
-    document.getElementById('block-action-btn').disabled = true;
-    document.getElementById('block-action-btn').onclick = () => {};
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Verificar';
+    actionBtn.disabled = true;
+    actionBtn.onclick = () => {};
 }
 
 function selectQuizOption(element, index, correct) {
     document.querySelectorAll('.quiz-option').forEach(o => o.classList.remove('selected'));
     element.classList.add('selected');
     selectedQuizAnswer = index;
-    document.getElementById('block-action-btn').disabled = false;
-    document.getElementById('block-action-btn').onclick = () => checkQuizAnswer(index, correct);
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.disabled = false;
+    actionBtn.onclick = () => checkQuizAnswer(index, correct);
 }
 
 function checkQuizAnswer(selected, correct) {
@@ -742,12 +918,19 @@ function checkQuizAnswer(selected, correct) {
         }
     });
 
+    // Mostrar explicação se disponível
+    const explanationEl = document.getElementById('quiz-explanation');
+    if (explanationEl) {
+        explanationEl.style.display = 'block';
+    }
+
     if (selected === correct) {
         quizCorrect++;
         showFeedback(true, 'Correto!');
     } else {
         subjectState.user.hearts--;
-        document.getElementById('hearts-count').textContent = subjectState.user.hearts;
+        const heartsEl = document.getElementById('hearts-count');
+        if (heartsEl) heartsEl.textContent = subjectState.user.hearts;
         showFeedback(false, 'Incorreto!');
     }
 
@@ -755,7 +938,7 @@ function checkQuizAnswer(selected, correct) {
         currentQuizIndex++;
         const block = subjectState.progress.currentBlock;
         renderQuiz(document.getElementById('block-content'), block);
-    }, 1500);
+    }, 2000);
 }
 
 function showQuizResults(block) {
@@ -782,18 +965,19 @@ function showQuizResults(block) {
         </div>
     `;
 
+    const actionBtn = document.getElementById('block-action-btn');
     if (accuracy >= 70) {
-        document.getElementById('block-action-btn').textContent = 'Continuar';
-        document.getElementById('block-action-btn').onclick = () => completeBlock();
+        actionBtn.textContent = 'Continuar';
+        actionBtn.onclick = () => completeBlock();
     } else {
-        document.getElementById('block-action-btn').textContent = 'Tentar Novamente';
-        document.getElementById('block-action-btn').onclick = () => {
+        actionBtn.textContent = 'Tentar Novamente';
+        actionBtn.onclick = () => {
             currentQuizIndex = 0;
             quizCorrect = 0;
             renderQuiz(container, block);
         };
     }
-    document.getElementById('block-action-btn').disabled = false;
+    actionBtn.disabled = false;
 }
 
 // ==========================================
@@ -823,18 +1007,27 @@ function renderReading(container, block) {
                     </ul>
                 </div>
             ` : ''}
-            ${c.amazonLink ? `
-                <a href="${c.amazonLink}" target="_blank" class="amazon-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 24px; background: #FF9900; color: white; text-decoration: none; border-radius: 12px; font-weight: 600;">
-                    <i class="fab fa-amazon"></i> Comprar na Amazon
-                </a>
+            ${c.source ? `
+                <div style="margin-top: 16px; padding: 12px; background: var(--bg-card); border-radius: 8px; font-size: 14px;">
+                    <i class="fas fa-link" style="color: var(--secondary);"></i>
+                    <span style="color: var(--text-muted);">Fonte: ${c.source}</span>
+                </div>
+            ` : ''}
+            ${c.bookRecommendation ? `
+                <div style="margin-top: 16px; padding: 16px; background: var(--bg-card); border-radius: 12px;">
+                    <h4 style="margin-bottom: 12px;"><i class="fas fa-book" style="color: var(--secondary);"></i> Leitura Recomendada:</h4>
+                    <p style="font-weight: 600;">${c.bookRecommendation.title}</p>
+                    ${c.bookRecommendation.author ? `<p style="color: var(--text-muted);">por ${c.bookRecommendation.author}</p>` : ''}
+                </div>
             ` : ''}
             <div style="margin-top: 16px; color: var(--text-muted); font-size: 14px;">
                 <i class="fas fa-clock"></i> ${c.timeToRead || '5 min'}
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Leitura Concluída';
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Leitura Concluída';
+    actionBtn.onclick = () => completeBlock();
 }
 
 // ==========================================
@@ -875,15 +1068,15 @@ function renderMatch(container, block) {
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Combine todos';
-    document.getElementById('block-action-btn').disabled = true;
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Combine todos';
+    actionBtn.disabled = true;
 }
 
 function selectMatchItem(element, side, id) {
     if (element.classList.contains('matched')) return;
     const subjectState = getCurrentSubjectState();
 
-    // Desselecionar itens do mesmo lado
     document.querySelectorAll(`.match-item[data-side="${side}"]`).forEach(i => i.classList.remove('selected'));
     element.classList.add('selected');
 
@@ -905,7 +1098,8 @@ function selectMatchItem(element, side, id) {
             element.classList.add('wrong');
             selectedMatch.element.classList.add('wrong');
             subjectState.user.hearts--;
-            document.getElementById('hearts-count').textContent = subjectState.user.hearts;
+            const heartsEl = document.getElementById('hearts-count');
+            if (heartsEl) heartsEl.textContent = subjectState.user.hearts;
             showFeedback(false, 'Incorreto!');
 
             setTimeout(() => {
@@ -942,17 +1136,19 @@ function renderFill(container, block) {
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Verificar';
-    document.getElementById('block-action-btn').disabled = true;
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Verificar';
+    actionBtn.disabled = true;
 }
 
 function checkFillAnswers() {
     const selects = document.querySelectorAll('.fill-select');
     const allFilled = Array.from(selects).every(s => s.value !== '');
-    document.getElementById('block-action-btn').disabled = !allFilled;
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.disabled = !allFilled;
 
     if (allFilled) {
-        document.getElementById('block-action-btn').onclick = () => {
+        actionBtn.onclick = () => {
             const subjectState = getCurrentSubjectState();
             const block = subjectState.progress.currentBlock;
             const sentences = block.content.sentences;
@@ -975,7 +1171,8 @@ function checkFillAnswers() {
                 setTimeout(() => completeBlock(), 1500);
             } else {
                 subjectState.user.hearts--;
-                document.getElementById('hearts-count').textContent = subjectState.user.hearts;
+                const heartsEl = document.getElementById('hearts-count');
+                if (heartsEl) heartsEl.textContent = subjectState.user.hearts;
                 showFeedback(false, 'Algumas incorretas!');
                 setTimeout(() => {
                     selects.forEach(s => {
@@ -984,7 +1181,7 @@ function checkFillAnswers() {
                         s.disabled = false;
                         s.value = '';
                     });
-                    document.getElementById('block-action-btn').disabled = true;
+                    actionBtn.disabled = true;
                 }, 2000);
             }
         };
@@ -1022,12 +1219,14 @@ function renderFlashcard(container, block) {
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').style.display = 'none';
+    const actionBtn = document.getElementById('block-action-btn');
+    if (actionBtn) actionBtn.style.display = 'none';
 }
 
 function flipCard() {
     isFlipped = !isFlipped;
-    document.querySelector('.flashcard').classList.toggle('flipped', isFlipped);
+    const flashcard = document.querySelector('.flashcard');
+    if (flashcard) flashcard.classList.toggle('flipped', isFlipped);
 }
 
 function nextCard() {
@@ -1038,7 +1237,8 @@ function nextCard() {
         isFlipped = false;
         renderFlashcard(document.getElementById('block-content'), block);
     } else {
-        document.getElementById('block-action-btn').style.display = 'block';
+        const actionBtn = document.getElementById('block-action-btn');
+        if (actionBtn) actionBtn.style.display = 'block';
         completeBlock();
     }
 }
@@ -1066,12 +1266,15 @@ function renderOrder(container, block) {
     `;
 
     setupDragAndDrop();
-    document.getElementById('block-action-btn').textContent = 'Verificar Ordem';
-    document.getElementById('block-action-btn').onclick = () => checkOrder();
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Verificar Ordem';
+    actionBtn.onclick = () => checkOrder();
 }
 
 function setupDragAndDrop() {
     const list = document.getElementById('order-list');
+    if (!list) return;
+
     const items = list.querySelectorAll('.order-item');
 
     items.forEach(item => {
@@ -1109,7 +1312,8 @@ function getDragAfterElement(container, y) {
 function updateOrderNumbers() {
     const items = document.querySelectorAll('#order-list .order-item');
     items.forEach((item, index) => {
-        item.querySelector('.order-number').textContent = index + 1;
+        const numberEl = item.querySelector('.order-number');
+        if (numberEl) numberEl.textContent = index + 1;
     });
 }
 
@@ -1133,7 +1337,8 @@ function checkOrder() {
         setTimeout(() => completeBlock(), 1500);
     } else {
         subjectState.user.hearts--;
-        document.getElementById('hearts-count').textContent = subjectState.user.hearts;
+        const heartsEl = document.getElementById('hearts-count');
+        if (heartsEl) heartsEl.textContent = subjectState.user.hearts;
         showFeedback(false, 'Ordem incorreta!');
         setTimeout(() => {
             items.forEach(i => i.classList.remove('correct', 'incorrect'));
@@ -1167,15 +1372,19 @@ function renderReflection(container, block) {
             </p>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Enviar Reflexão';
-    document.getElementById('block-action-btn').disabled = true;
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Enviar Reflexão';
+    actionBtn.disabled = true;
 }
 
 function checkReflectionLength(textarea, minWords) {
     const words = textarea.value.trim().split(/\s+/).filter(w => w.length > 0).length;
-    document.getElementById('word-count').textContent = words;
-    document.getElementById('block-action-btn').disabled = words < minWords;
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const countEl = document.getElementById('word-count');
+    if (countEl) countEl.textContent = words;
+
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.disabled = words < minWords;
+    actionBtn.onclick = () => completeBlock();
 }
 
 // ==========================================
@@ -1198,8 +1407,9 @@ function renderTimeline(container, block) {
             </div>
         </div>
     `;
-    document.getElementById('block-action-btn').textContent = 'Continuar';
-    document.getElementById('block-action-btn').onclick = () => completeBlock();
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Continuar';
+    actionBtn.onclick = () => completeBlock();
 }
 
 // ==========================================
@@ -1223,7 +1433,8 @@ function completeBlock() {
 }
 
 function showBlockComplete(block) {
-    document.getElementById('block-content').innerHTML = `
+    const container = document.getElementById('block-content');
+    container.innerHTML = `
         <div class="block-complete animate-in" style="text-align: center;">
             <div style="width: 100px; height: 100px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; animation: bounce 0.5s ease infinite alternate;">
                 <i class="fas fa-check" style="font-size: 48px; color: white;"></i>
@@ -1236,10 +1447,11 @@ function showBlockComplete(block) {
         </div>
     `;
 
-    document.getElementById('block-action-btn').textContent = 'Próximo';
-    document.getElementById('block-action-btn').onclick = () => goToNextBlock();
-    document.getElementById('block-action-btn').disabled = false;
-    document.getElementById('block-action-btn').style.display = 'block';
+    const actionBtn = document.getElementById('block-action-btn');
+    actionBtn.textContent = 'Próximo';
+    actionBtn.onclick = () => goToNextBlock();
+    actionBtn.disabled = false;
+    actionBtn.style.display = 'block';
 
     updateStats();
 }
@@ -1294,7 +1506,8 @@ function updateBlockProgress() {
     const subjectState = getCurrentSubjectState();
     const blocks = getBlocksForUnit(subjectState.progress.currentUnit);
     const progress = ((subjectState.progress.currentBlockIndex + 1) / blocks.length) * 100;
-    document.getElementById('block-progress-fill').style.width = `${progress}%`;
+    const progressEl = document.getElementById('block-progress-fill');
+    if (progressEl) progressEl.style.width = `${progress}%`;
 }
 
 // ==========================================
@@ -1302,6 +1515,8 @@ function updateBlockProgress() {
 // ==========================================
 function showFeedback(isCorrect, message) {
     const container = document.getElementById('feedback-container');
+    if (!container) return;
+
     const feedback = document.createElement('div');
     feedback.className = `feedback-toast ${isCorrect ? 'correct' : 'incorrect'}`;
     feedback.innerHTML = `
@@ -1331,9 +1546,13 @@ function updateStats() {
     const subjectState = getCurrentSubjectState();
     if (!subjectState) return;
 
-    document.getElementById('xp-count').textContent = subjectState.user.xp;
-    document.getElementById('streak-count').textContent = subjectState.user.streak;
-    document.getElementById('level-count').textContent = calculateLevelForSubject(subjectState);
+    const xpEl = document.getElementById('xp-count');
+    const streakEl = document.getElementById('streak-count');
+    const levelEl = document.getElementById('level-count');
+
+    if (xpEl) xpEl.textContent = subjectState.user.xp;
+    if (streakEl) streakEl.textContent = subjectState.user.streak;
+    if (levelEl) levelEl.textContent = calculateLevelForSubject(subjectState);
 }
 
 function calculateLevelForSubject(subjectState) {
@@ -1391,6 +1610,9 @@ function checkAchievements() {
             case 'streak':
                 if (subjectState.user.streak >= condition.value) unlocked = true;
                 break;
+            case 'xp':
+                if (subjectState.user.xp >= condition.value) unlocked = true;
+                break;
             case 'subject_complete':
                 if (condition.value === state.currentSubject) {
                     const subject = getSubject(state.currentSubject);
@@ -1423,60 +1645,59 @@ function checkAchievements() {
 
         if (unlocked) {
             subjectState.achievements.push(ach.id);
+            showAchievementUnlocked(ach);
         }
     });
 }
 
+function showAchievementUnlocked(achievement) {
+    const container = document.getElementById('feedback-container');
+    if (!container) return;
+
+    const notification = document.createElement('div');
+    notification.className = 'achievement-notification';
+    notification.innerHTML = `
+        <div style="background: linear-gradient(135deg, #ffd700, #ff9600); padding: 16px 24px; border-radius: 16px; display: flex; align-items: center; gap: 16px; color: #1a1a2e; box-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);">
+            <i class="fas ${achievement.icon}" style="font-size: 32px;"></i>
+            <div>
+                <div style="font-weight: 800; font-size: 14px;">CONQUISTA DESBLOQUEADA!</div>
+                <div style="font-size: 18px; font-weight: 600;">${achievement.title}</div>
+            </div>
+        </div>
+    `;
+    container.appendChild(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 4000);
+}
+
+// ==========================================
+// PERSISTÊNCIA DE DADOS
+// ==========================================
 function saveProgress() {
-    localStorage.setItem('edulearn_state', JSON.stringify(state));
+    const key = getStorageKey();
+    localStorage.setItem(key, JSON.stringify(state));
 }
 
 function loadProgress() {
-    const saved = localStorage.getItem('edulearn_state');
+    const key = getStorageKey();
+    const saved = localStorage.getItem(key);
     if (saved) {
         state = JSON.parse(saved);
-    }
-
-    // Migrar dados antigos do SocioLearn se existirem
-    const oldSaved = localStorage.getItem('sociolearn_state');
-    if (oldSaved && !saved) {
-        const oldState = JSON.parse(oldSaved);
-        state.globalUser.name = oldState.user?.name || '';
-        state.subjects.sociology = {
-            user: {
-                xp: oldState.user?.xp || 0,
-                streak: oldState.user?.streak || 0,
-                hearts: oldState.user?.hearts || 5,
-                level: 1,
-                lastStudyDate: oldState.user?.lastStudyDate || null
-            },
-            progress: oldState.progress || {
-                completedBlocks: [],
-                completedUnits: [],
-                completedSections: [],
-                currentSection: null,
-                currentUnit: null,
-                currentBlock: null,
-                currentBlockIndex: 0
-            },
-            achievements: oldState.achievements || [],
-            dailyBlocks: oldState.dailyBlocks || 0,
-            lastDailyReset: oldState.lastDailyReset || null
-        };
-        saveProgress();
     }
 }
 
 function resetProgress() {
     if (confirm('Tem certeza que deseja reiniciar TODO o progresso de TODAS as matérias? Esta ação não pode ser desfeita.')) {
-        localStorage.removeItem('edulearn_state');
-        localStorage.removeItem('sociolearn_state');
+        const key = getStorageKey();
+        localStorage.removeItem(key);
         state = {
             currentSubject: null,
-            globalUser: { name: '' },
+            globalUser: { name: currentUser ? USERS[currentUser].name : '' },
             subjects: {}
         };
-        showScreen('login-screen');
+        showSubjectSelection();
     }
 }
 
@@ -1503,9 +1724,9 @@ function showProfile() {
 function renderProfile() {
     const subjectState = getCurrentSubjectState();
     const subject = getSubject(state.currentSubject);
+    const userInfo = currentUser ? USERS[currentUser] : { name: 'Estudante', avatar: 'fa-user', color: '#58cc02' };
 
     if (!subjectState || !subject) {
-        // Mostrar perfil global
         renderGlobalProfile();
         return;
     }
@@ -1514,12 +1735,15 @@ function renderProfile() {
     const levelInfo = LEVELS.find(l => l.level === level) || LEVELS[0];
     const nextLevel = LEVELS.find(l => l.level === level + 1);
 
-    document.getElementById('profile-container').innerHTML = `
+    const container = document.getElementById('profile-container');
+    if (!container) return;
+
+    container.innerHTML = `
         <div class="profile-header">
-            <div class="profile-avatar" style="background: ${subject.color}">
-                <i class="fas ${subject.icon}"></i>
+            <div class="profile-avatar" style="background: ${userInfo.color}">
+                <i class="fas ${userInfo.avatar}"></i>
             </div>
-            <h2 class="profile-name">${state.globalUser.name || 'Estudante'}</h2>
+            <h2 class="profile-name">${userInfo.name}</h2>
             <p class="profile-level">${subject.name} - Nível ${level} - ${levelInfo.title}</p>
         </div>
 
@@ -1554,7 +1778,7 @@ function renderProfile() {
 
         <div class="achievements-section">
             <h3><i class="fas fa-trophy"></i> Conquistas</h3>
-            ${ACHIEVEMENTS.slice(0, 6).map(ach => `
+            ${ACHIEVEMENTS.slice(0, 8).map(ach => `
                 <div class="achievement-card ${subjectState.achievements.includes(ach.id) ? 'unlocked' : ''}">
                     <div class="achievement-icon">
                         <i class="fas ${ach.icon}"></i>
@@ -1574,10 +1798,16 @@ function renderProfile() {
         <button class="btn btn-secondary" onclick="resetProgress()" style="width: 100%; margin-top: 12px; background: var(--danger);">
             <i class="fas fa-trash"></i> Reiniciar TODO o Progresso
         </button>
+
+        <button class="btn btn-secondary" onclick="switchUser()" style="width: 100%; margin-top: 12px;">
+            <i class="fas fa-sign-out-alt"></i> Trocar de Usuário
+        </button>
     `;
 }
 
 function renderGlobalProfile() {
+    const userInfo = currentUser ? USERS[currentUser] : { name: 'Estudante', avatar: 'fa-user', color: '#58cc02' };
+
     // Calcular estatísticas globais
     let totalXP = 0;
     let totalBlocks = 0;
@@ -1594,13 +1824,16 @@ function renderGlobalProfile() {
         }
     });
 
-    document.getElementById('profile-container').innerHTML = `
+    const container = document.getElementById('profile-container');
+    if (!container) return;
+
+    container.innerHTML = `
         <div class="profile-header">
-            <div class="profile-avatar">
-                <i class="fas fa-user-graduate"></i>
+            <div class="profile-avatar" style="background: ${userInfo.color}">
+                <i class="fas ${userInfo.avatar}"></i>
             </div>
-            <h2 class="profile-name">${state.globalUser.name || 'Estudante'}</h2>
-            <p class="profile-level">Perfil Global - EduLearn</p>
+            <h2 class="profile-name">${userInfo.name}</h2>
+            <p class="profile-level">Perfil Global - SaberQuest</p>
         </div>
 
         <div class="stats-grid">
@@ -1643,6 +1876,19 @@ function renderGlobalProfile() {
         <button class="btn btn-secondary" onclick="resetProgress()" style="width: 100%; margin-top: 24px; background: var(--danger);">
             <i class="fas fa-trash"></i> Reiniciar TODO o Progresso
         </button>
+
+        <button class="btn btn-secondary" onclick="switchUser()" style="width: 100%; margin-top: 12px;">
+            <i class="fas fa-sign-out-alt"></i> Trocar de Usuário
+        </button>
     `;
 }
-console.log('✅ app.js carregado completamente');
+
+function backToMainFromProfile() {
+    if (state.currentSubject) {
+        showMainScreen();
+    } else {
+        showSubjectSelection();
+    }
+}
+
+console.log('SaberQuest app.js carregado!');
